@@ -24,8 +24,7 @@ void backend_flatpak_install(gchar *filename, GError **error) {
 
   g_file_get_contents(filename, &data, NULL, error);
   if (*error != NULL) {
-    g_free(data);
-    return;
+    goto done;
   }
 
   bytes = g_bytes_new(data, strlen(data));
