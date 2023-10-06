@@ -9,6 +9,20 @@ args = [
   '-Werror'
 ]
 
+include_dirs = [
+  'src'
+]
+
+sources = [
+  'src/main.c',
+  'src/backends/flatpak.c',
+  'src/backends/backend.c',
+]
+
 flatpak_dep = dependency('flatpak')
 
-exe = executable('appdrag', 'src/main.c', c_args : args, dependencies : [flatpak_dep], install : true)
+if flatpak_dep.found()
+  args += '-DBACKEND_FLATPAK'
+endif
+
+exe = executable('appdrag', sources, c_args : args, dependencies : [flatpak_dep], include_directories : include_dirs, install : true)

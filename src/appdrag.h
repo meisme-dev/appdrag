@@ -1,0 +1,4 @@
+#pragma once
+#define APPDRAG_ERROR 1
+#define APPDRAG_ERROR_ROOT 1
+#define APPDRAG_ERROR_UNINITIALIZED 2

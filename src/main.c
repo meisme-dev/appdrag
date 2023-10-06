@@ -1,3 +1,5 @@
+#include "appdrag.h"
+#include "backends/backend.h"
 #include <flatpak/flatpak.h>
 #include <glib-2.0/gio/gio.h>
 #include <limits.h>
@@ -7,8 +9,6 @@
 #include <unistd.h>
 
 #define BUF_LEN (10 * (sizeof(struct inotify_event) + NAME_MAX + 1))
-#define APPDRAG_ERROR 1
-#define APPDRAG_ERROR_ROOT 1
 
 int monitor(char *filename, GApplication *application);
 
@@ -65,6 +65,11 @@ int main(int argc, char **argv) {
     log_error(error, G_LOG_LEVEL_ERROR, "AppDrag-Core");
   }
 
+  backend_init(&error);
+  if (error != NULL) {
+    log_error(error, G_LOG_LEVEL_ERROR, "AppDrag-Backend");
+  }
+
   int option = 0;
   while ((option = getopt(argc, argv, "f:h")) != -1) { // TODO: Help message
     switch (option) {
@@ -96,14 +101,21 @@ int monitor(char *filename, GApplication *application) {
     return -1;
   }
 
-  GError *install_error = NULL;
-  FlatpakInstallation *installation = flatpak_installation_new_system_with_id("default", NULL, &install_error);
-  if (install_error != NULL) {
-    log_error(install_error, G_LOG_LEVEL_WARNING, "AppDrag-Install");
-  }
-
   GNotification *notification = g_notification_new("");
   GIcon *icon = g_themed_icon_new("dialog-information");
+
+  GError *init_error = NULL;
+  backend_init(&init_error);
+  if (init_error != NULL) {
+    g_notification_set_title(notification, "Failed to initialize backend(s)");
+    g_notification_set_body(notification, init_error->message);
+    g_notification_set_icon(notification, icon);
+    g_notification_set_priority(notification, G_NOTIFICATION_PRIORITY_HIGH);
+    g_application_send_notification(application, NULL, notification);
+    return -1;
+  }
+
+  gint err_count = 0;
 
   for (;;) {
     int number_read = read(inotify_fd, buf, BUF_LEN);
@@ -115,87 +127,46 @@ int monitor(char *filename, GApplication *application) {
     for (ptr = buf; ptr < buf + number_read;) {
       struct inotify_event *event = (struct inotify_event *)ptr;
       if ((event->mask & IN_CREATE || event->mask & IN_MOVED_TO || event->mask & IN_MODIFY) && !(event->mask & IN_ISDIR)) {
-        char *tmp = calloc(strlen(filename) + strlen(event->name) + 1, sizeof(char));
-        sprintf(tmp, "%s/%s", filename, event->name);
-        puts(tmp);
+        char *path = calloc(strlen(filename) + strlen(event->name) + 1, sizeof(char));
+        sprintf(path, "%s/%s", filename, event->name);
 
-        gchar *data = NULL;
-        GBytes *bytes = NULL;
-        GError *transaction_error = NULL;
-
-        FlatpakTransaction *transaction = flatpak_transaction_new_for_installation(installation, NULL, &transaction_error);
-        if (transaction_error != NULL) {
-          goto handle_error;
-        }
-
-        g_notification_set_title(notification, "Installing");
-        g_notification_set_body(notification, tmp);
+        g_notification_set_title(notification, "Installing application");
+        g_notification_set_body(notification, path);
         g_notification_set_icon(notification, icon);
         g_notification_set_priority(notification, G_NOTIFICATION_PRIORITY_NORMAL);
-        g_notification_set_category(notification, "app.installing");
         g_application_send_notification(application, NULL, notification);
 
-        g_file_get_contents(tmp, &data, NULL, &transaction_error);
-        if (transaction_error != NULL) {
-          goto handle_error;
+        GError *backend_error = NULL;
+
+        backend_select(path, &backend_error);
+
+        if (backend_error != NULL) {
+          g_notification_set_title(notification, "Failed to use backend(s)");
+          g_notification_set_body(notification, backend_error->message);
+          g_notification_set_icon(notification, icon);
+          g_notification_set_priority(notification, G_NOTIFICATION_PRIORITY_HIGH);
+          g_application_send_notification(application, NULL, notification);
+          err_count++;
+          if (err_count >= 3) {
+            err_count = 0;
+            ptr += sizeof(struct inotify_event) + event->len;
+          }
+          continue;
         }
+        
+        err_count = 0;
 
-        bytes = g_bytes_new(data, strlen(data));
-
-        flatpak_transaction_add_install_flatpakref(transaction, bytes, &transaction_error);
-        if (transaction_error != NULL) {
-          goto handle_error;
-        }
-
-        flatpak_transaction_run(transaction, NULL, &transaction_error);
-        if (transaction_error != NULL) {
-          goto handle_error;
-        }
-
-        g_log("AppDrag-Install", G_LOG_LEVEL_INFO, "Installed %s successfully", event->name);
-
-        g_notification_set_title(notification, "Installed successfully");
-        g_notification_set_body(notification, tmp);
+        g_notification_set_title(notification, "Installed application");
+        g_notification_set_body(notification, path);
         g_notification_set_icon(notification, icon);
         g_notification_set_priority(notification, G_NOTIFICATION_PRIORITY_NORMAL);
-        g_notification_set_category(notification, "app.installed");
         g_application_send_notification(application, NULL, notification);
-
-        goto next;
-
-      handle_error : {
-        log_error(transaction_error, G_LOG_LEVEL_WARNING, "AppDrag-Install");
-        g_notification_set_title(notification, "Failed to install");
-        g_notification_set_body(notification, tmp);
-        g_object_unref(icon);
-        icon = g_themed_icon_new("dialog-error");
-        g_notification_set_icon(notification, icon);
-        g_notification_set_priority(notification, G_NOTIFICATION_PRIORITY_HIGH);
-        g_notification_set_category(notification, "flatpak.failed");
-        g_application_send_notification(application, NULL, notification);
-        g_object_unref(icon);
-        icon = g_themed_icon_new("dialog-information");
-        goto next;
-      }
-
-      next : {
-        ptr += sizeof(struct inotify_event) + event->len;
-        free(tmp);
-        if (bytes != NULL) {
-          g_free(bytes);
-        }
-        if (data != NULL) {
-          g_free(data);
-        }
-        g_object_unref(transaction);
-        continue;
-      }
       }
       ptr += sizeof(struct inotify_event) + event->len;
     }
   }
   g_object_unref(icon);
   g_object_unref(notification);
-  g_object_unref(installation);
+  backend_destroy();
   return 0;
 }
