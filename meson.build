@@ -19,7 +19,7 @@ sources = [
   'src/backends/backend.c',
 ]
 
-flatpak_dep = dependency('flatpak')
+flatpak_dep = dependency('flatpak', required : false)
 
 if flatpak_dep.found()
   args += '-DBACKEND_FLATPAK'
