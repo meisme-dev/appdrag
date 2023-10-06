@@ -21,24 +21,24 @@ void drop_root_privileges(GError **err) {
   if ((uid = getuid()) == 0) {
     char *tmp_uid = getenv("SUDO_UID");
     if (!tmp_uid) {
-      goto error;
+      goto handle_error;
     }
     uid = strtoll(tmp_uid, NULL, 10);
   }
   if ((gid = getgid()) == 0) {
     char *tmp_gid = getenv("SUDO_GID");
     if (!tmp_gid) {
-      goto error;
+      goto handle_error;
     }
     gid = strtoll(tmp_gid, NULL, 10);
   }
   if (setgid(gid) != 0) {
-    goto error;
+    goto handle_error;
   }
   if (setuid(uid) != 0) {
-    goto error;
+    goto handle_error;
   }
-error : {
+handle_error : {
   g_set_error(err, APPDRAG_ERROR, APPDRAG_ERROR_ROOT, "Failed to drop root: %s. Do not run the daemon as root!", strerror(errno));
   return;
 }
@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
   }
 
   int option = 0;
-  while ((option = getopt(argc, argv, "f:h")) != -1) {  // TODO: Help message
+  while ((option = getopt(argc, argv, "f:h")) != -1) { // TODO: Help message
     switch (option) {
       case 'f':
         return monitor(strdup(optarg), application);
@@ -121,7 +121,7 @@ int monitor(char *filename, GApplication *application) {
         g_notification_set_body(notification, tmp);
         g_notification_set_icon(notification, icon);
         g_notification_set_priority(notification, G_NOTIFICATION_PRIORITY_NORMAL);
-        g_notification_set_category(notification, "flatpak.installing");
+        g_notification_set_category(notification, "app.installing");
         g_application_send_notification(application, NULL, notification);
 
         gchar *data = NULL;
@@ -129,39 +129,51 @@ int monitor(char *filename, GApplication *application) {
 
         FlatpakTransaction *transaction = flatpak_transaction_new_for_installation(installation, NULL, &error);
         if (error != NULL) {
-          log_error(error, G_LOG_LEVEL_WARNING, "flatpak");
-          goto next;
+          goto handle_error;
         }
 
         g_file_get_contents(tmp, &data, NULL, &error);
         if (error != NULL) {
-          log_error(error, G_LOG_LEVEL_WARNING, "flatpak");
-          goto next;
+          goto handle_error;
         }
 
         bytes = g_bytes_new(data, strlen(data));
+
         flatpak_transaction_add_install_flatpakref(transaction, bytes, &error);
         if (error != NULL) {
-          log_error(error, G_LOG_LEVEL_WARNING, "flatpak");
-          goto next;
+          goto handle_error;
         }
 
         flatpak_transaction_run(transaction, NULL, &error);
         if (error != NULL) {
-          log_error(error, G_LOG_LEVEL_WARNING, "flatpak");
-          goto next;
+          goto handle_error;
         }
 
-        g_log("AppDrag-Core", G_LOG_LEVEL_INFO, "Installed %s successfully", event->name);
+        g_log("AppDrag-Install", G_LOG_LEVEL_INFO, "Installed %s successfully", event->name);
 
         g_notification_set_title(notification, "Installed flatpakref successfully");
         g_notification_set_body(notification, tmp);
         g_notification_set_icon(notification, icon);
         g_notification_set_priority(notification, G_NOTIFICATION_PRIORITY_NORMAL);
-        g_notification_set_category(notification, "flatpak.installed");
+        g_notification_set_category(notification, "app.installed");
         g_application_send_notification(application, NULL, notification);
 
         goto next;
+
+      handle_error : {
+        log_error(error, G_LOG_LEVEL_WARNING, "AppDrag-Install");
+        g_notification_set_title(notification, "Failed to install flatpakref");
+        g_notification_set_body(notification, tmp);
+        g_object_unref(icon);
+        icon = g_themed_icon_new("dialog-error");
+        g_notification_set_icon(notification, icon);
+        g_notification_set_priority(notification, G_NOTIFICATION_PRIORITY_HIGH);
+        g_notification_set_category(notification, "flatpak.failed");
+        g_application_send_notification(application, NULL, notification);
+        g_object_unref(icon);
+        icon = g_themed_icon_new("dialog-information");
+        goto next;
+      }
 
       next : {
         ptr += sizeof(struct inotify_event) + event->len;
