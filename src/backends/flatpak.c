@@ -48,6 +48,59 @@ done : {
 }
 }
 
+void backend_flatpak_uninstall(gchar *filename, GError **error) {
+  g_assert(*error == NULL);
+  g_assert(installation != NULL);
+
+  gchar *data = NULL;
+  gchar *name = NULL;
+  GKeyFile *key_file = g_key_file_new();
+
+  FlatpakTransaction *transaction = flatpak_transaction_new_for_installation(installation, NULL, error);
+  if (*error != NULL) {
+    goto done;
+  }
+
+  g_file_get_contents(filename, &data, NULL, error);
+  if (*error != NULL) {
+    goto done;
+  }
+
+  g_key_file_load_from_data(key_file, data, -1, G_KEY_FILE_NONE, error);
+  if (*error != NULL) {
+    goto done;
+  }
+
+  name = g_key_file_get_string(key_file, "Flatpak Ref", "Name", error);
+
+  gchar *ref_string = g_strconcat("app/", name,
+                     "/", flatpak_get_default_arch (), "/",
+                     g_key_file_get_string(key_file, "Flatpak Ref", "Branch", error), NULL);
+  if (*error != NULL) {
+    goto done;
+  }
+
+  flatpak_transaction_add_uninstall(transaction, ref_string, error);
+  if (*error != NULL) {
+    goto done;
+  }
+
+  flatpak_transaction_run(transaction, NULL, error);
+  if (*error != NULL) {
+    goto done;
+  }
+
+  goto done;
+
+done : {
+  g_object_unref(transaction);
+  g_free(data);
+  g_free(name);
+  g_object_unref(key_file);
+  return;
+}
+}
+
 void backend_flatpak_destroy(void) {
   g_object_unref(installation);
 }

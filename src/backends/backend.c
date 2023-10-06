@@ -20,12 +20,19 @@ void backend_init(GError **error) {
   }
 }
 
-void backend_select(gchar *filename, GError **error) {
+void backend_select(gchar *filename, GError **error, enum OperationType optype) {
   g_assert(*error == NULL);
   gchar *mime_type = g_content_type_guess(filename, NULL, 0, NULL);
   if (strcmp(mime_type, "application/vnd.flatpak.ref") == 0) {
 #ifdef BACKEND_FLATPAK
-    backend_flatpak_install(filename, error);
+    switch (optype) {
+      case INSTALL:
+      backend_flatpak_install(filename, error);
+      break;
+      case UNINSTALL:
+      backend_flatpak_uninstall(filename, error);
+      break;
+    }
 #endif
     g_free(mime_type);
   }

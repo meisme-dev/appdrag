@@ -3,4 +3,5 @@
 
 void backend_flatpak_init(GError **error);
 void backend_flatpak_install(gchar *filename, GError **error);
+void backend_flatpak_uninstall(gchar *filename, GError **error);
 void backend_flatpak_destroy(void);
