@@ -54,6 +54,8 @@ void backend_flatpak_uninstall(gchar *filename, GError **error) {
 
   gchar *data = NULL;
   gchar *name = NULL;
+  gchar *branch = NULL;
+  gchar *ref_string = NULL;
   GKeyFile *key_file = g_key_file_new();
 
   FlatpakTransaction *transaction = flatpak_transaction_new_for_installation(installation, NULL, error);
@@ -72,10 +74,16 @@ void backend_flatpak_uninstall(gchar *filename, GError **error) {
   }
 
   name = g_key_file_get_string(key_file, "Flatpak Ref", "Name", error);
+  if (*error != NULL) {
+    goto done;
+  }
 
-  gchar *ref_string = g_strconcat("app/", name,
-                     "/", flatpak_get_default_arch (), "/",
-                     g_key_file_get_string(key_file, "Flatpak Ref", "Branch", error), NULL);
+  branch = g_key_file_get_string(key_file, "Flatpak Ref", "Branch", error);
+  if (*error != NULL) {
+    goto done;
+  }
+
+  ref_string = g_strconcat("app/", name, "/", flatpak_get_default_arch(), "/", branch, NULL);
   if (*error != NULL) {
     goto done;
   }
@@ -96,7 +104,9 @@ done : {
   g_object_unref(transaction);
   g_free(data);
   g_free(name);
-  g_object_unref(key_file);
+  g_free(branch);
+  g_free(ref_string);
+  g_free(key_file);
   return;
 }
 }
