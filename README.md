@@ -5,7 +5,7 @@ AppDrag is a deamon that will watch a directory, for example `$HOME/Apps`, for n
 `/path/to/exe -f <folder>`
 
 ## Build dependencies
-`glib2-devel` for notifications and interfacting with libflatpak
+`glib2-devel` for notifications and interfacing with libflatpak
 
 `flatpak-devel` for installing flatpaks
 
