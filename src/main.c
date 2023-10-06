@@ -45,8 +45,10 @@ handle_error : {
 }
 
 void log_error(GError *error, GLogLevelFlags flags, const gchar *domain) {
-  g_log(domain, flags, "%s", error->message);
-  g_error_free(error);
+  if (error != NULL) {
+    g_log(domain, flags, "%s", error->message);
+    g_error_free(error);
+  }
 }
 
 int main(int argc, char **argv) {
@@ -94,10 +96,10 @@ int monitor(char *filename, GApplication *application) {
     return -1;
   }
 
-  GError *error = NULL;
-  FlatpakInstallation *installation = flatpak_installation_new_system_with_id("default", NULL, &error);
-  if (error != NULL) {
-    log_error(error, G_LOG_LEVEL_WARNING, "flatpak");
+  GError *install_error = NULL;
+  FlatpakInstallation *installation = flatpak_installation_new_system_with_id("default", NULL, &install_error);
+  if (install_error != NULL) {
+    log_error(install_error, G_LOG_LEVEL_WARNING, "AppDrag-Install");
   }
 
   GNotification *notification = g_notification_new("");
@@ -117,41 +119,42 @@ int monitor(char *filename, GApplication *application) {
         sprintf(tmp, "%s/%s", filename, event->name);
         puts(tmp);
 
-        g_notification_set_title(notification, "Installing flatpakref");
+        gchar *data = NULL;
+        GBytes *bytes = NULL;
+        GError *transaction_error = NULL;
+
+        FlatpakTransaction *transaction = flatpak_transaction_new_for_installation(installation, NULL, &transaction_error);
+        if (transaction_error != NULL) {
+          goto handle_error;
+        }
+
+        g_notification_set_title(notification, "Installing");
         g_notification_set_body(notification, tmp);
         g_notification_set_icon(notification, icon);
         g_notification_set_priority(notification, G_NOTIFICATION_PRIORITY_NORMAL);
         g_notification_set_category(notification, "app.installing");
         g_application_send_notification(application, NULL, notification);
 
-        gchar *data = NULL;
-        GBytes *bytes = NULL;
-
-        FlatpakTransaction *transaction = flatpak_transaction_new_for_installation(installation, NULL, &error);
-        if (error != NULL) {
-          goto handle_error;
-        }
-
-        g_file_get_contents(tmp, &data, NULL, &error);
-        if (error != NULL) {
+        g_file_get_contents(tmp, &data, NULL, &transaction_error);
+        if (transaction_error != NULL) {
           goto handle_error;
         }
 
         bytes = g_bytes_new(data, strlen(data));
 
-        flatpak_transaction_add_install_flatpakref(transaction, bytes, &error);
-        if (error != NULL) {
+        flatpak_transaction_add_install_flatpakref(transaction, bytes, &transaction_error);
+        if (transaction_error != NULL) {
           goto handle_error;
         }
 
-        flatpak_transaction_run(transaction, NULL, &error);
-        if (error != NULL) {
+        flatpak_transaction_run(transaction, NULL, &transaction_error);
+        if (transaction_error != NULL) {
           goto handle_error;
         }
 
         g_log("AppDrag-Install", G_LOG_LEVEL_INFO, "Installed %s successfully", event->name);
 
-        g_notification_set_title(notification, "Installed flatpakref successfully");
+        g_notification_set_title(notification, "Installed successfully");
         g_notification_set_body(notification, tmp);
         g_notification_set_icon(notification, icon);
         g_notification_set_priority(notification, G_NOTIFICATION_PRIORITY_NORMAL);
@@ -161,8 +164,8 @@ int monitor(char *filename, GApplication *application) {
         goto next;
 
       handle_error : {
-        log_error(error, G_LOG_LEVEL_WARNING, "AppDrag-Install");
-        g_notification_set_title(notification, "Failed to install flatpakref");
+        log_error(transaction_error, G_LOG_LEVEL_WARNING, "AppDrag-Install");
+        g_notification_set_title(notification, "Failed to install");
         g_notification_set_body(notification, tmp);
         g_object_unref(icon);
         icon = g_themed_icon_new("dialog-error");
