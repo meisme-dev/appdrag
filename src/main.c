@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
   GError *error = NULL;
   GApplication *application = g_application_new("io.github.meisme.AppDrag", G_APPLICATION_DEFAULT_FLAGS);
 
-  g_application_register(application, NULL, NULL);
+  g_application_register(application, NULL, &error);
   if (error != NULL) {
     log_error(error, G_LOG_LEVEL_ERROR, "AppDrag-Core");
   }
