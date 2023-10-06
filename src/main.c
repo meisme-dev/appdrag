@@ -51,7 +51,7 @@ void log_error(GError *error, GLogLevelFlags flags, const gchar *domain) {
 
 int main(int argc, char **argv) {
   GError *error = NULL;
-  GApplication *application = g_application_new("io.github.meisme.appdrag", G_APPLICATION_DEFAULT_FLAGS);
+  GApplication *application = g_application_new("io.github.meisme.AppDrag", G_APPLICATION_DEFAULT_FLAGS);
 
   g_application_register(application, NULL, NULL);
   if (error != NULL) {
@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
   }
 
   int option = 0;
-  while ((option = getopt(argc, argv, "f:h")) != -1) {
+  while ((option = getopt(argc, argv, "f:h")) != -1) {  // TODO: Help message
     switch (option) {
       case 'f':
         return monitor(strdup(optarg), application);
@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
         break;
     }
   }
-  
+
   g_object_unref(application);
   return 0;
 }
