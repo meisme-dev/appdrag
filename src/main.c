@@ -141,7 +141,7 @@ int monitor(char *filename, GApplication *application) {
         backend_select(path, &backend_error);
 
         if (backend_error != NULL) {
-          g_notification_set_title(notification, "Failed to use backend(s)");
+          g_notification_set_title(notification, "Failed to use backend");
           g_notification_set_body(notification, backend_error->message);
           g_notification_set_icon(notification, icon);
           g_notification_set_priority(notification, G_NOTIFICATION_PRIORITY_HIGH);
