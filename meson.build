@@ -17,6 +17,7 @@ sources = [
   'src/main.c',
   'src/backends/flatpak.c',
   'src/backends/backend.c',
+  'src/platforms/linux.c',
 ]
 
 flatpak_dep = dependency('flatpak', required : false)

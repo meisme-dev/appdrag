@@ -1,7 +1,5 @@
 #include "backend.h"
 #include "appdrag.h"
-#include "backends/flatpak.h"
-#include <glib-2.0/gobject/gobject.h>
 #include <string.h>
 
 #ifdef BACKEND_FLATPAK

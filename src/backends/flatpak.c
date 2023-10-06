@@ -1,7 +1,6 @@
 #include "flatpak.h"
 #include <appdrag.h>
 #include <flatpak/flatpak.h>
-#include <stdio.h>
 
 static FlatpakInstallation *installation = NULL;
 
